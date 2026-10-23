@@ -26,11 +26,20 @@ export async function sendMail(to: string | undefined | null, subject: string, t
   }
 }
 
-export function sendCredentials(opts: { to?: string | null; name: string; login: string; password: string; school: string; role: string }) {
+export function sendResetCode(opts: { to?: string | null; name: string; code: string }) {
+  return sendMail(
+    opts.to,
+    'Your TinySteps password reset code',
+    `Hello ${opts.name},\n\nYour password reset code is ${opts.code}. It expires in 15 minutes.\n\n` +
+      `If you did not ask for this, you can ignore this email; your password will not change.\n`,
+  );
+}
+
+export function sendCredentials(opts: { to?: string | null; name: string; login: string; password: string; school: string; role: string; message?: string }) {
   return sendMail(
     opts.to,
     `Your ${opts.school} account on TinySteps`,
-    `Hello ${opts.name},\n\nAn account has been created for you as ${opts.role} at ${opts.school}.\n\n` +
+    `Hello ${opts.name},\n\n${opts.message?.trim() || `An account has been created for you as ${opts.role} at ${opts.school}.`}\n\n` +
       `Login: ${opts.login}\nTemporary password: ${opts.password}\n\n` +
       `Open the TinySteps app and sign in. You will be asked to set a new password on first login.\n`,
   );

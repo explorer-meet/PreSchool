@@ -6,6 +6,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { authenticate, HttpError, prisma, requireRole, schoolId, wrap } from '../lib';
 import { notifyUsers, parentIdsFor } from '../services/notify';
+import { readPrivateDocument } from '../services/privateDocuments';
 
 export const teacherRouter = Router();
 export const mediaRouter = Router();
@@ -145,10 +146,22 @@ teacherRouter.post('/batches/:id/media', upload.single('file'), wrap(async (req,
       caption: z.string().optional(), activity: z.string().optional(),
       studentIds: z.string().optional().transform((s) => (s ? (JSON.parse(s) as string[]) : [])).pipe(z.array(z.string())),
     }).parse(req.body);
-    const kids = d.studentIds.length
-      ? await prisma.student.findMany({ where: { id: { in: d.studentIds }, batchId: req.params.id, status: 'ACTIVE' } })
-      : [];
-    if (kids.length !== d.studentIds.length) throw new HttpError(400, 'Some students are not in this batch');
+    let kids = await prisma.student.findMany({
+      where: {
+        batchId: req.params.id, status: 'ACTIVE',
+        ...(d.studentIds.length ? { id: { in: d.studentIds } } : { OR: [{ photoConsent: true }, { photoConsent: null }] }),
+      },
+      select: { id: true, parentId: true, photoConsent: true },
+    });
+    if (d.studentIds.length && kids.length !== d.studentIds.length) {
+      const validStudents = await prisma.student.count({
+        where: { id: { in: d.studentIds }, batchId: req.params.id, status: 'ACTIVE' },
+      });
+      if (validStudents !== d.studentIds.length) throw new HttpError(400, 'Some students are not in this batch');
+      throw new HttpError(403, 'Photo and video sharing requires parent consent');
+    }
+    if (!kids.length) throw new HttpError(400, 'No students in this batch have photo-sharing consent');
+    if (kids.some((kid) => kid.photoConsent === false)) throw new HttpError(403, 'Photo and video sharing requires parent consent');
     const media = await prisma.media.create({
       data: {
         schoolId: sid, batchId: req.params.id, uploaderId: req.user!.id, mime: file.mimetype, fileName: file.filename,
@@ -158,7 +171,7 @@ teacherRouter.post('/batches/:id/media', upload.single('file'), wrap(async (req,
     });
     const what = media.type === 'VIDEO' ? 'video' : 'photo';
     const title = d.activity ? `New ${what}: ${d.activity}` : `New class ${what}`;
-    const targets = kids.length ? kids.map((k) => k.parentId) : await parentIdsFor({ schoolId: sid, batchId: req.params.id });
+    const targets = kids.map((k) => k.parentId);
     await notifyUsers(targets, 'MEDIA', title, d.caption ?? 'Open the app to view.');
     res.status(201).json(media);
   } catch (e) {
@@ -179,15 +192,34 @@ teacherRouter.get('/batches/:id/media', wrap(async (req, res) => {
 teacherRouter.get('/pickups', wrap(async (req, res) => {
   const day = startOfDay(new Date());
   res.json(await prisma.pickupRequest.findMany({
-    where: { schoolId: schoolId(req), status: 'APPROVED', date: { gte: day, lt: new Date(day.getTime() + 86400000) }, student: { batch: { teacherId: req.user!.id } } },
-    select: { id: true, personName: true, personPhone: true, relation: true, type: true, student: { select: { name: true } } }, // code is never sent to teachers
+    where: { schoolId: schoolId(req), status: 'APPROVED', date: { gte: day, lt: new Date(day.getTime() + 86400000) }, student: { status: 'ACTIVE', batch: { teacherId: req.user!.id } } },
+    select: {
+      id: true, personName: true, personPhone: true, relation: true, type: true,
+      authorizedPersonId: true, student: { select: { name: true } },
+    }, // code and identity documents are never sent to teachers
   }));
+}));
+
+teacherRouter.get('/pickups/:id/authorized-photo', wrap(async (req, res) => {
+  const day = startOfDay(new Date());
+  const request = await prisma.pickupRequest.findFirst({
+    where: {
+      id: req.params.id, schoolId: schoolId(req), status: 'APPROVED',
+      date: { gte: day, lt: new Date(day.getTime() + 86400000) },
+      student: { status: 'ACTIVE', batch: { teacherId: req.user!.id } },
+    },
+    select: { authorizedPerson: { select: { photoFileName: true, photoMime: true, active: true } } },
+  });
+  const person = request?.authorizedPerson;
+  if (!person?.active || !person.photoFileName || !person.photoMime) throw new HttpError(404, 'Registered pickup photo not available');
+  const image = await readPrivateDocument(UPLOAD_DIR, person.photoFileName);
+  res.type(person.photoMime).set('Cache-Control', 'private, no-store').send(image);
 }));
 
 teacherRouter.post('/pickups/:id/complete', wrap(async (req, res) => {
   const { code } = z.object({ code: z.string().length(4) }).parse(req.body);
   const pr = await prisma.pickupRequest.findFirst({
-    where: { id: req.params.id, schoolId: schoolId(req), status: 'APPROVED', student: { batch: { teacherId: req.user!.id } } }, include: { student: true },
+    where: { id: req.params.id, schoolId: schoolId(req), status: 'APPROVED', student: { status: 'ACTIVE', batch: { teacherId: req.user!.id } } }, include: { student: true },
   });
   if (!pr) throw new HttpError(404, 'Approved request not found');
   if (startOfDay(pr.date).getTime() !== startOfDay(new Date()).getTime()) throw new HttpError(400, 'Request is not valid today');

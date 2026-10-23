@@ -9,7 +9,12 @@ parentRouter.use(authenticate, requireRole('PARENT'));
 async function myChild(userId: string, id: string) {
   const s = await prisma.student.findFirst({
     where: { id, parentId: userId },
-    include: { batch: { select: { id: true, name: true, startTime: true, endTime: true, class: { select: { name: true } }, teacher: { select: { name: true } } } } },
+    select: {
+      id: true, schoolId: true, batchId: true, name: true, dob: true, gender: true,
+      admissionNo: true, admissionDate: true, status: true, bloodGroup: true, allergies: true,
+      homeAddress: true, alternateParentPhone: true, transportMode: true, transportContact: true, photoConsent: true,
+      batch: { select: { id: true, name: true, startTime: true, endTime: true, class: { select: { name: true } }, teacher: { select: { name: true } } } },
+    },
   });
   if (!s) throw new HttpError(404, 'Child not found');
   return s;
@@ -33,7 +38,12 @@ function summarize(rows: { status: string; lateMinutes: number | null }[]) {
 parentRouter.get('/children', wrap(async (req, res) => {
   res.json(await prisma.student.findMany({
     where: { parentId: req.user!.id, status: 'ACTIVE' },
-    include: { batch: { select: { name: true, class: { select: { name: true } }, teacher: { select: { name: true } } } } },
+    select: {
+      id: true, schoolId: true, batchId: true, name: true, dob: true, gender: true,
+      admissionNo: true, admissionDate: true, status: true, bloodGroup: true, allergies: true,
+      homeAddress: true, alternateParentPhone: true, transportMode: true, transportContact: true, photoConsent: true,
+      batch: { select: { name: true, class: { select: { name: true } }, teacher: { select: { name: true } } } },
+    },
   }));
 }));
 parentRouter.get('/children/:id', wrap(async (req, res) => res.json(await myChild(req.user!.id, req.params.id))));
@@ -130,16 +140,44 @@ parentRouter.get('/events', wrap(async (req, res) => {
 }));
 
 // ---- Pick-up / drop by another person: needs principal approval ----
+parentRouter.get('/children/:id/authorized-pickups', wrap(async (req, res) => {
+  const child = await myChild(req.user!.id, req.params.id);
+  res.json(await prisma.authorizedPickupPerson.findMany({
+    where: { studentId: child.id, schoolId: child.schoolId, active: true },
+    select: { id: true, name: true, relation: true },
+    orderBy: { name: 'asc' },
+  }));
+}));
+
 parentRouter.post('/children/:id/pickup-requests', wrap(async (req, res) => {
   const d = z.object({
-    personName: z.string().min(2), personPhone: z.string().min(8), relation: z.string().min(2),
+    authorizedPersonId: z.string().optional(),
+    personName: z.string().min(2).optional(), personPhone: z.string().min(8).optional(), relation: z.string().min(2).optional(),
     type: z.enum(['PICKUP', 'DROP', 'BOTH']), date: z.coerce.date(), reason: z.string().optional(),
   }).parse(req.body);
   const c = await myChild(req.user!.id, req.params.id);
   if (startOfDay(d.date) < startOfDay(new Date())) throw new HttpError(400, 'Date cannot be in the past');
-  const pr = await prisma.pickupRequest.create({ data: { ...d, date: startOfDay(d.date), schoolId: c.schoolId, studentId: c.id, parentId: req.user!.id } });
+  let person: { id: string; name: string; phone: string; relation: string } | null = null;
+  if (d.authorizedPersonId) {
+    person = await prisma.authorizedPickupPerson.findFirst({
+      where: { id: d.authorizedPersonId, studentId: c.id, schoolId: c.schoolId, active: true },
+      select: { id: true, name: true, phone: true, relation: true },
+    });
+    if (!person) throw new HttpError(404, 'Authorized pickup person not found');
+  }
+  if (!person && (!d.personName || !d.personPhone || !d.relation)) {
+    throw new HttpError(400, 'Choose a registered person or provide their name, phone, and relation');
+  }
+  const pr = await prisma.pickupRequest.create({
+    data: {
+      type: d.type, date: startOfDay(d.date), reason: d.reason,
+      personName: person?.name ?? d.personName!, personPhone: person?.phone ?? d.personPhone!,
+      relation: person?.relation ?? d.relation!, authorizedPersonId: person?.id,
+      schoolId: c.schoolId, studentId: c.id, parentId: req.user!.id,
+    },
+  });
   const principals = await prisma.user.findMany({ where: { schoolId: c.schoolId, role: 'PRINCIPAL' }, select: { id: true } });
-  await notifyUsers(principals.map((p) => p.id), 'PICKUP', 'New pick-up request', `${d.personName} (${d.relation}) for ${c.name} on ${pr.date.toDateString()}`);
+  await notifyUsers(principals.map((p) => p.id), 'PICKUP', 'New pick-up request', `${pr.personName} (${pr.relation}) for ${c.name} on ${pr.date.toDateString()}`);
   res.status(201).json(pr);
 }));
 
@@ -154,5 +192,3 @@ parentRouter.post('/pickup-requests/:id/cancel', wrap(async (req, res) => {
   if (!r.count) throw new HttpError(404, 'Request not found or already closed');
   res.json({ ok: true });
 }));
-
-

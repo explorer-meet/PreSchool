@@ -22,8 +22,10 @@ model School {
   rejectReason    String?
   feeReminderDays Int       @default(3) // days before due date to start reminding
   createdAt       DateTime  @default(now())
-  approvedAt      DateTime?
+  approvedAt      DateTime? // first approval only; never overwritten
+  statusChangedAt DateTime?
 
+  statusLogs    SchoolStatusLog[]
   users         User[]
   classes       SchoolClass[]
   batches       Batch[]
@@ -32,7 +34,38 @@ model School {
   feeStructures FeeStructure[]
   scheduled     ScheduledNotification[]
   pickups       PickupRequest[]
+  authorizedPickupPeople AuthorizedPickupPerson[]
   media         Media[]
+}
+
+// One-time password reset code (stored hashed). Only the latest unused code per user is valid.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model SchoolStatusLog {
+  id         String   @id @default(cuid())
+  schoolId   String
+  fromStatus String
+  toStatus   String
+  reason     String?
+  adminId    String
+  adminName  String
+  createdAt  DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId, createdAt])
 }
 
 // User.role: SUPER_ADMIN | PRINCIPAL | TEACHER | HELPER | STAFF | PARENT
@@ -46,7 +79,10 @@ model User {
   passwordHash       String
   mustChangePassword Boolean  @default(true)
   designation        String?
+  address            String?
   salary             Int?
+  photoFileName      String?
+  photoMime          String?
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
 
@@ -55,6 +91,7 @@ model User {
   children      Student[]
   notifications Notification[]
   deviceTokens  DeviceToken[]
+  passwordResets PasswordReset[]
 }
 
 // A grade level such as "Jr KG" or "Sr KG". Fees are defined per class.
@@ -108,6 +145,15 @@ model Student {
   status        String   @default("ACTIVE") // ACTIVE | LEFT
   bloodGroup    String?
   allergies     String?
+  homeAddress   String?
+  alternateParentPhone String?
+  transportMode String?
+  transportContact String?
+  photoConsent  Boolean?
+  identityDocumentFileName String?
+  identityDocumentMime String?
+  photoFileName String?
+  photoMime String?
 
   school     School  @relation(fields: [schoolId], references: [id])
   batch      Batch   @relation(fields: [batchId], references: [id])
@@ -117,9 +163,33 @@ model Student {
   invoices   FeeInvoice[]
   attendance Attendance[]
   pickups    PickupRequest[]
+  authorizedPickupPeople AuthorizedPickupPerson[]
   mediaTags  MediaTag[]
 
   @@unique([schoolId, admissionNo])
+}
+
+model AuthorizedPickupPerson {
+  id           String   @id @default(cuid())
+  schoolId     String
+  studentId    String
+  name         String
+  phone        String
+  relation     String
+  photoFileName String?
+  photoMime    String?
+  aadhaarFileName String?
+  aadhaarMime  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+  requests PickupRequest[]
+
+  @@unique([studentId, phone])
+  @@index([schoolId, studentId, active])
 }
 
 model MedicalRecord {
@@ -295,9 +365,11 @@ model PickupRequest {
   decidedAt     DateTime?
   completedAt   DateTime?
   completedById String?
+  authorizedPersonId String?
   createdAt     DateTime  @default(now())
   school        School    @relation(fields: [schoolId], references: [id])
   student       Student   @relation(fields: [studentId], references: [id])
+  authorizedPerson AuthorizedPickupPerson? @relation(fields: [authorizedPersonId], references: [id])
 }
 
 model Notification {

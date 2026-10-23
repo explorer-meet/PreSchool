@@ -1,7 +1,8 @@
 ﻿import React, { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { api } from '../api';
+import { popup } from '../ResultPopup';
 import { Badge, Button, Card, Chip, FormScreen, Heading, ListScreen, Loading, Page, Segmented, Sub, Title, colors, day, money, useFetch } from '../ui';
 import { MediaGrid } from './media';
 import { NotificationsScreen, ProfileScreen } from './common';
@@ -170,7 +171,11 @@ function Pickups({ navigation }: any) {
           ) : null}
           {r.status === 'REJECTED' && r.decisionNote ? <Sub>{r.decisionNote}</Sub> : null}
           {r.status === 'PENDING' || r.status === 'APPROVED' ? (
-            <Button label="Cancel request" secondary danger onPress={async () => { try { await api('POST', `/parent/pickup-requests/${r.id}/cancel`, {}); reload(); } catch (e: any) { Alert.alert('Error', e.message); } }} />
+            <Button label="Cancel request" secondary danger onPress={async () => {
+              if (!(await popup.confirm('Cancel this request?', 'The school will no longer be able to approve or act on this request.', 'Cancel request', true))) return;
+              try { await api('POST', `/parent/pickup-requests/${r.id}/cancel`, {}); popup.success('Request cancelled'); reload(); }
+              catch (e: any) { popup.error(e.message); }
+            }} />
           ) : null}
         </Card>
       )} />
@@ -179,20 +184,45 @@ function Pickups({ navigation }: any) {
 
 function NewPickup({ navigation }: any) {
   const { data: kids } = useFetch<any[]>('/parent/children');
+  const [childId, setChildId] = React.useState('');
+  const [personId, setPersonId] = React.useState('');
+  const { data: people } = useFetch<any[]>(childId ? `/parent/children/${childId}/authorized-pickups` : null);
   if (!kids) return <Loading />;
   return (
-    <FormScreen
-      intro="The principal must approve this first. Once approved you get a 4-digit code to give to the person."
-      submitLabel="Send request"
-      fields={[
-        { key: 'child', label: 'Child', kind: 'select', options: kids.map((k) => ({ value: k.id, label: k.name })) },
-        { key: 'type', label: 'For', kind: 'select', options: [{ value: 'PICKUP', label: 'Pick-up' }, { value: 'DROP', label: 'Drop' }, { value: 'BOTH', label: 'Both' }] },
-        { key: 'date', label: 'Date', kind: 'date' },
-        { key: 'personName', label: 'Person’s name' }, { key: 'personPhone', label: 'Person’s phone', kind: 'phone' },
-        { key: 'relation', label: 'Relation to child', placeholder: 'Uncle, Neighbour...' }, { key: 'reason', label: 'Reason', required: false },
-      ]}
-      submit={({ child, ...body }) => api('POST', `/parent/children/${child}/pickup-requests`, body)}
-      onDone={() => { Alert.alert('Request sent', 'You will be notified when it is approved.'); navigation.goBack(); }} />
+    <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16 }}>
+      <Sub>The principal must approve the request. For a registered person, the principal has already verified their identity documents.</Sub>
+      <Title>Choose child</Title>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
+        {kids.map((kid) => <Chip key={kid.id} label={kid.name} active={kid.id === childId} onPress={() => { setChildId(kid.id); setPersonId(''); }} />)}
+      </View>
+      {childId ? (
+        <>
+          <Title>Authorized person (optional)</Title>
+          <Sub>Choose a registered person or enter the details for a one-time request.</Sub>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
+            {(people ?? []).map((person) => (
+              <Chip key={person.id} label={`${person.name} · ${person.relation}`} active={person.id === personId} onPress={() => setPersonId(person.id === personId ? '' : person.id)} />
+            ))}
+          </View>
+          <FormScreen
+            key={`${childId}-${personId}`}
+            intro="Approved requests include a one-time 4-digit handover code."
+            submitLabel="Send request"
+            fields={[
+              { key: 'type', label: 'For', kind: 'select', options: [{ value: 'PICKUP', label: 'Pick-up' }, { value: 'DROP', label: 'Drop' }, { value: 'BOTH', label: 'Both' }] },
+              { key: 'date', label: 'Date', kind: 'date' },
+              ...(personId ? [] : [
+                { key: 'personName', label: 'Person’s name' },
+                { key: 'personPhone', label: 'Person’s phone', kind: 'phone' as const },
+                { key: 'relation', label: 'Relation to child', placeholder: 'Uncle, Neighbour...' },
+              ]),
+              { key: 'reason', label: 'Reason', required: false, kind: 'multiline' },
+            ]}
+            submit={(body) => api('POST', `/parent/children/${childId}/pickup-requests`, { ...body, ...(personId ? { authorizedPersonId: personId } : {}) })}
+            onDone={() => { popup.success('Request sent!', 'You will be notified when it is approved.', { emoji: '🚸' }); navigation.goBack(); }} />
+        </>
+      ) : null}
+    </ScrollView>
   );
 }
 const PickupStack = () => (
@@ -210,7 +240,12 @@ const Events = () => (
 const icons: Record<string, string> = { Children: '👧', Pickup: '🚸', Events: '🎉', Alerts: '🔔', Me: '👤' };
 export function ParentApp() {
   return (
-    <Tabs.Navigator screenOptions={({ route }) => ({ tabBarActiveTintColor: colors.primary, tabBarIcon: () => <Title>{icons[route.name]}</Title> })}>
+    <Tabs.Navigator screenOptions={({ route }) => ({
+      tabBarActiveTintColor: colors.primary,
+      tabBarIcon: () => <Title>{icons[route.name]}</Title>,
+      tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border, paddingTop: 5, elevation: 8 },
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+    })}>
       <Tabs.Screen name="Children" component={ChildrenStack} options={{ headerShown: false }} />
       <Tabs.Screen name="Pickup" component={PickupStack} options={{ headerShown: false }} />
       <Tabs.Screen name="Events" component={Events} />
@@ -219,4 +254,3 @@ export function ParentApp() {
     </Tabs.Navigator>
   );
 }
-

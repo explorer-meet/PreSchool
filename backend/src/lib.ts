@@ -35,10 +35,15 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
   if (!h?.startsWith('Bearer ')) return next(new HttpError(401, 'Missing token'));
   try {
     req.user = jwt.verify(h.slice(7), SECRET) as AuthUser;
-    next();
   } catch {
-    next(new HttpError(401, 'Invalid token'));
+    return next(new HttpError(401, 'Invalid token'));
   }
+  prisma.user.findUnique({ where: { id: req.user.id }, select: { active: true, role: true, schoolId: true, school: { select: { status: true } } } })
+    .then((user) => {
+      if (!user?.active || user.role !== req.user!.role || user.schoolId !== req.user!.schoolId) return next(new HttpError(401, 'Account access is no longer active. Please sign in again.'));
+      if (user.school && user.school.status !== 'APPROVED') return next(new HttpError(403, 'School is not active'));
+      next();
+    }).catch(next);
 }
 
 export const requireRole = (...roles: Role[]) => (req: Request, _res: Response, next: NextFunction) =>
@@ -59,5 +64,4 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 }
-
 

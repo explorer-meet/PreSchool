@@ -1,0 +1,65 @@
+For Backend ----
+F:\PreSchool-clone>cd backend
+F:\PreSchool-clone\backend>npm run dev
+
+Private uploads use encrypted local storage until Firebase / Amazon S3 is configured.
+The local key has been saved separately in backend\.env.documents.local and is ignored by Git.
+Back up this file securely; do not delete it, share it, or commit it.
+For a fresh installation only: npm run documents:setup
+To protect restored legacy private images: npm run documents:encrypt
+Restart the backend after changing environment configuration.
+
+
+For Frontend ---
+F:\PreSchool-clone>cd mobile
+F:\PreSchool-clone\mobile>npx expo start --clear
+
+Scan the QR code using the Expo Go app on your Android phone.
+This command explicitly selects Expo Go; no APK build or EAS login is needed.
+Equivalent direct command: npx expo start --go --clear
+Keep the phone and computer on the same Wi-Fi. The API URL must point to the computer's reachable IPv4 address.
+
+
+For Database ---
+npx prisma generate
+
+
+
+expo go dependency aapda project ni 58 hati aapde 57 set kri
+
+api.ts file change to mobile network connect computer is commented
+
+
+Notifications are guarded automatically in Expo Go; do not comment out authentication or notification code.
+Android remote push notifications are unsupported in Expo Go, but remain enabled in compatible native builds.
+
+Super admin: admin@preschool.app / Admin@12345
+
+1. School - SOA
+
+PRINCIPAL
+psoa@gmail.com
+SOA@12345
+
+PARENT
+chetan@gmail.com
+Ispl123#
+
+Teacher
+harshita@gmail.com
+Harshita@12345
+
+STUDENT
+raj
+
+
+2. School - EuroKids
+
+Principal
+europ@gmail.com
+Euro@12345
+
+we have to take this below things for real time 
+amazon s3 storage
+firebase
+smtp

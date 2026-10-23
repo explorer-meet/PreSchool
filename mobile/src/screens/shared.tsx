@@ -1,7 +1,7 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { api } from '../api';
+import { popup } from '../ResultPopup';
 import { FieldDef, FormScreen } from '../ui';
 export const Stack = createNativeStackNavigator();
 
@@ -10,21 +10,34 @@ export const classOpt = { kind: 'select' as const, optionsPath: '/principal/clas
 export const batchOpt = { kind: 'select' as const, optionsPath: '/principal/batches', optionLabel: batchLabel };
 
 export function credsAlert(r: any, who: string) {
-  Alert.alert(
-    'Done',
-    r.emailSent ? `Login details were emailed to ${r.login ?? r.parentLogin ?? who}.` : r.temporaryPassword ? `Email is not configured.\nLogin: ${r.login ?? r.parentLogin ?? ''}\nTemporary password: ${r.temporaryPassword}\n\nShare securely.` : 'Saved.',
-  );
+  if (r.emailSent) popup.success('Login details sent!', `Emailed to ${r.login ?? r.parentLogin ?? who}.`, { emoji: '📧' });
+  else if (r.temporaryPassword) {
+    popup.credentials(`Share login details for ${who}`, r.login ?? r.parentLogin ?? '', r.temporaryPassword);
+  } else popup.success('Saved');
 }
 
-export interface FormDef { title: string; fields: FieldDef[]; post: string; transform?: (b: any) => any; after?: (r: any) => void; intro?: string }
+export interface FormDef {
+  title: string; fields: FieldDef[]; post: string; editPath?: string; editFields?: FieldDef[];
+  transform?: (b: any) => any; after?: (r: any) => void; intro?: string; initialValues?: Record<string, string>; submitLabel?: string;
+}
 // Registers form screens by name so list screens can navigate to them with serialisable params only.
 export const formScreens = (defs: Record<string, FormDef>) =>
   Object.entries(defs).map(([name, d]) => (
     <Stack.Screen key={name} name={name} options={{ title: d.title }}>
-      {({ navigation }: any) => (
-        <FormScreen fields={d.fields} intro={d.intro} transform={d.transform} submit={(b) => api('POST', d.post, b)} onDone={(r) => { d.after?.(r); navigation.goBack(); }} />
-      )}
+      {({ navigation, route }: any) => {
+        const item = d.editPath ? route.params?.item : undefined;
+        const fields = item && d.editPath ? (d.editFields ?? d.fields) : d.fields;
+        const initialValues = item ? Object.fromEntries(fields.map((f) => {
+          const value = item[f.key];
+          const formatted = value == null ? '' : f.kind === 'money' ? String(value / 100) : String(value);
+          return [f.key, f.kind === 'date' ? formatted.slice(0, 10) : formatted];
+        })) : d.initialValues;
+        return (
+          <FormScreen key={item?.id ?? 'new'} fields={fields} initialValues={initialValues} intro={d.intro} transform={d.transform}
+            submitLabel={item ? 'Save changes' : d.submitLabel ?? `Add ${d.title.toLowerCase()}`}
+            submit={(b) => item && d.editPath ? api('PATCH', `${d.editPath}/${item.id}`, b) : api('POST', d.post, b)}
+            onDone={(r) => { if (d.after) d.after(r); else popup.success(`${d.title} ${item ? 'updated' : 'added'}`); navigation.goBack(); }} />
+        );
+      }}
     </Stack.Screen>
   ));
-
-

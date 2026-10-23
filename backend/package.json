@@ -5,10 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch --env-file=.env src/index.ts",
-    "start": "node --env-file=.env dist/index.js",
+    "dev": "tsx watch --env-file=.env --env-file-if-exists=.env.documents.local src/index.ts",
+    "start": "node --env-file=.env --env-file-if-exists=.env.documents.local dist/index.js",
     "build": "tsc",
-    "smoke": "tsx --env-file=.env src/smoke.ts",
+    "smoke": "tsx --env-file=.env --env-file-if-exists=.env.documents.local src/smoke.ts",
+    "smoke:isolated": "tsx src/smokeIsolated.ts",
+    "documents:setup": "tsx --env-file=.env --env-file-if-exists=.env.documents.local src/setupPrivateDocuments.ts",
+    "documents:encrypt": "tsx --env-file=.env --env-file-if-exists=.env.documents.local src/migratePrivateDocuments.ts",
     "db:push": "prisma db push"
   },
   "keywords": [],

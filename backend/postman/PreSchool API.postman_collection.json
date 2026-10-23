@@ -1,0 +1,689 @@
+{
+  "info": {
+    "_postman_id": "6d7c4b82-0e5f-4dbd-84d3-7a90c8cae652",
+    "name": "PreSchool Backend API",
+    "description": "Postman collection for the Express backend. Set baseUrl to the backend origin (for example http://localhost:4000) and sign in with each role to populate the token collection variable. Protected requests use the current bearer token. Replace the ID variables with values returned by your API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "schoolId", "value": "replace-with-school-id", "type": "string" },
+    { "key": "classId", "value": "replace-with-class-id", "type": "string" },
+    { "key": "batchId", "value": "replace-with-batch-id", "type": "string" },
+    { "key": "studentId", "value": "replace-with-student-id", "type": "string" },
+    { "key": "staffId", "value": "replace-with-staff-id", "type": "string" },
+    { "key": "parentId", "value": "replace-with-parent-user-id", "type": "string" },
+    { "key": "feeStructureId", "value": "replace-with-fee-structure-id", "type": "string" },
+    { "key": "invoiceId", "value": "replace-with-invoice-id", "type": "string" },
+    { "key": "eventId", "value": "replace-with-event-id", "type": "string" },
+    { "key": "notificationId", "value": "replace-with-scheduled-notification-id", "type": "string" },
+    { "key": "pickupRequestId", "value": "replace-with-pickup-request-id", "type": "string" },
+    { "key": "mediaId", "value": "replace-with-media-id", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication and public",
+      "item": [
+        {
+          "name": "Log in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set('token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"admin@preschool.app\",\n  \"password\": \"Admin@12345\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "On success, automatically stores the returned JWT in the collection variable token."
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"NewPassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/change-password"
+          }
+        },
+        {
+          "name": "Register device token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"replace-with-device-push-token\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/device-token"
+          }
+        },
+        {
+          "name": "Register school",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Little Steps Preschool\",\n  \"address\": \"12 Example Road\",\n  \"city\": \"Bengaluru\",\n  \"phone\": \"9876543210\",\n  \"email\": \"principal@example.com\",\n  \"registrationNo\": \"REG-001\",\n  \"principalName\": \"Asha Rao\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/schools/register"
+          }
+        },
+        {
+          "name": "Get my notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/me/notifications"
+          }
+        },
+        {
+          "name": "Mark all notifications read",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/me/notifications/read-all"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Super admin",
+      "item": [
+        {
+          "name": "List schools",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/schools?status=PENDING",
+            "description": "Optional query: status (for example PENDING, APPROVED, REJECTED, SUSPENDED)."
+          }
+        },
+        {
+          "name": "Approve school",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/admin/schools/{{schoolId}}/approve"
+          }
+        },
+        {
+          "name": "Reject school",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Please provide the missing registration document.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/admin/schools/{{schoolId}}/reject"
+          }
+        },
+        {
+          "name": "Suspend school",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/admin/schools/{{schoolId}}/suspend"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Principal",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/dashboard" }
+        },
+        {
+          "name": "Get school settings",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/settings" }
+        },
+        {
+          "name": "Update school settings",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feeReminderDays\": 5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/settings"
+          }
+        },
+        {
+          "name": "List classes",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/classes" }
+        },
+        {
+          "name": "Create class",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jr KG\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/classes"
+          }
+        },
+        {
+          "name": "Update class",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sr KG\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/classes/{{classId}}"
+          }
+        },
+        {
+          "name": "List batches",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/principal/batches?classId={{classId}}"
+          }
+        },
+        {
+          "name": "Create batch",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": \"{{classId}}\",\n  \"name\": \"Morning\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"12:00\",\n  \"academicYear\": \"2026-2027\",\n  \"capacity\": 30,\n  \"teacherId\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/batches"
+          }
+        },
+        {
+          "name": "Update batch",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afternoon\",\n  \"teacherId\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/batches/{{batchId}}"
+          }
+        },
+        {
+          "name": "List staff",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/staff" }
+        },
+        {
+          "name": "Create staff account",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Kumar\",\n  \"role\": \"TEACHER\",\n  \"email\": \"teacher@example.com\",\n  \"phone\": \"9876543211\",\n  \"designation\": \"Class Teacher\",\n  \"salary\": 25000\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/staff"
+          }
+        },
+        {
+          "name": "Update staff",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Kumar\",\n  \"phone\": \"9876543211\",\n  \"designation\": \"Senior Teacher\",\n  \"salary\": 28000,\n  \"active\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/staff/{{staffId}}"
+          }
+        },
+        {
+          "name": "Reset staff password",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/principal/staff/{{staffId}}/reset-password" }
+        },
+        {
+          "name": "List students",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/principal/students?batchId={{batchId}}&classId={{classId}}"
+          }
+        },
+        {
+          "name": "Enroll student",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Anaya Sharma\",\n  \"dob\": \"2021-06-15\",\n  \"gender\": \"Female\",\n  \"batchId\": \"{{batchId}}\",\n  \"bloodGroup\": \"O+\",\n  \"allergies\": \"None\",\n  \"parent\": {\n    \"name\": \"Meera Sharma\",\n    \"phone\": \"9876543212\",\n    \"email\": \"parent@example.com\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/students"
+          }
+        },
+        {
+          "name": "Update student",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchId\": \"{{batchId}}\",\n  \"status\": \"ACTIVE\",\n  \"bloodGroup\": \"O+\",\n  \"allergies\": \"None\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/students/{{studentId}}"
+          }
+        },
+        {
+          "name": "Reset parent password",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/principal/parents/{{parentId}}/reset-password" }
+        },
+        {
+          "name": "List fee structures",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/fee-structures" }
+        },
+        {
+          "name": "Create fee structure",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": \"{{classId}}\",\n  \"name\": \"Monthly tuition\",\n  \"amount\": 500000,\n  \"frequency\": \"MONTHLY\",\n  \"dueDay\": 5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/fee-structures"
+          }
+        },
+        {
+          "name": "Update fee structure",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated monthly tuition\",\n  \"amount\": 550000,\n  \"dueDay\": 10\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/fee-structures/{{feeStructureId}}"
+          }
+        },
+        {
+          "name": "Delete fee structure",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/principal/fee-structures/{{feeStructureId}}" }
+        },
+        {
+          "name": "Generate invoices",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/principal/invoices/generate" }
+        },
+        {
+          "name": "List invoices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/principal/invoices?status=OPEN",
+            "description": "Optional query: status=OPEN returns all unpaid invoices; other supported stored invoice statuses can be supplied."
+          }
+        },
+        {
+          "name": "Record invoice payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250000,\n  \"method\": \"UPI\",\n  \"reference\": \"TXN-12345\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/invoices/{{invoiceId}}/payments",
+            "description": "Amounts are integer minor currency units (paise)."
+          }
+        },
+        {
+          "name": "List events",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/events" }
+        },
+        {
+          "name": "Create event",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Annual Day\",\n  \"description\": \"School celebration\",\n  \"date\": \"2026-12-15T09:00:00.000Z\",\n  \"batchId\": \"{{batchId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/events"
+          }
+        },
+        {
+          "name": "List scheduled notifications",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/principal/notifications" }
+        },
+        {
+          "name": "Create scheduled notification",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audience\": \"SCHOOL\",\n  \"title\": \"Term begins soon\",\n  \"body\": \"Please check the school calendar.\",\n  \"kind\": \"ONCE\",\n  \"date\": \"2026-11-01T09:00:00.000Z\",\n  \"sendHour\": 9\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/notifications",
+            "description": "Use kind ONCE with date or MONTHLY with dayOfMonth. CLASS audience requires classId; BATCH audience requires batchId."
+          }
+        },
+        {
+          "name": "Activate or deactivate scheduled notification",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/notifications/{{notificationId}}"
+          }
+        },
+        {
+          "name": "Delete scheduled notification",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/principal/notifications/{{notificationId}}" }
+        },
+        {
+          "name": "Broadcast to parents",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audience\": \"SCHOOL\",\n  \"title\": \"Reminder\",\n  \"body\": \"School will be closed on Friday.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/broadcast",
+            "description": "Use audience SCHOOL, CLASS (with classId), or BATCH (with batchId)."
+          }
+        },
+        {
+          "name": "List pickup requests",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/principal/pickup-requests?status=PENDING"
+          }
+        },
+        {
+          "name": "Approve or reject pickup request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approve\": true,\n  \"note\": \"Verified with the parent.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/principal/pickup-requests/{{pickupRequestId}}/decide"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher",
+      "item": [
+        {
+          "name": "List my batches",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/batches" }
+        },
+        {
+          "name": "List students in batch",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/students" }
+        },
+        {
+          "name": "Get batch attendance",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/attendance?date=2026-10-21"
+          }
+        },
+        {
+          "name": "Mark batch attendance",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-10-21\",\n  \"records\": [\n    { \"studentId\": \"{{studentId}}\", \"status\": \"PRESENT\" },\n    { \"studentId\": \"replace-with-another-student-id\", \"status\": \"LATE\", \"lateMinutes\": 10 }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/attendance"
+          }
+        },
+        {
+          "name": "Create classwork or homework",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"HOMEWORK\",\n  \"title\": \"Practice counting\",\n  \"description\": \"Count objects from 1 to 10.\",\n  \"dueDate\": \"2026-10-25T00:00:00.000Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/homework"
+          }
+        },
+        {
+          "name": "List batch classwork and homework",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/homework" }
+        },
+        {
+          "name": "Create student progress report",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"term\": \"Term 1\",\n  \"language\": 4,\n  \"numeracy\": 5,\n  \"social\": 4,\n  \"motor\": 4,\n  \"creativity\": 5,\n  \"remarks\": \"Participates enthusiastically in group activities.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/teacher/students/{{studentId}}/reports"
+          }
+        },
+        {
+          "name": "Get student medical records",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/students/{{studentId}}/medical" }
+        },
+        {
+          "name": "Create student medical record",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"CHECKUP\",\n  \"title\": \"Routine checkup\",\n  \"notes\": \"No concerns noted.\",\n  \"date\": \"2026-10-21T00:00:00.000Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/teacher/students/{{studentId}}/medical"
+          }
+        },
+        {
+          "name": "Upload batch photo or video",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "caption", "value": "Art activity", "type": "text" },
+                { "key": "activity", "value": "Painting", "type": "text" },
+                { "key": "studentIds", "value": "[\"{{studentId}}\"]", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/media",
+            "description": "Select one file. Supported types: JPEG, PNG, WebP, HEIC, MP4, QuickTime, and 3GPP; maximum 100 MB. Omit studentIds to share with the whole batch."
+          }
+        },
+        {
+          "name": "List batch media",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/batches/{{batchId}}/media" }
+        },
+        {
+          "name": "Download media file",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/media/{{mediaId}}/file" }
+        },
+        {
+          "name": "List today's approved pickups",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/pickups" }
+        },
+        {
+          "name": "Complete pickup handover",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"1234\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/teacher/pickups/{{pickupRequestId}}/complete",
+            "description": "Enter the 4-digit code shared with the authorized pickup person."
+          }
+        },
+        {
+          "name": "List upcoming school events",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/teacher/events" }
+        }
+      ]
+    },
+    {
+      "name": "Parent",
+      "item": [
+        {
+          "name": "List my children",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children" }
+        },
+        {
+          "name": "Get child details",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}" }
+        },
+        {
+          "name": "Get child medical records",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/medical" }
+        },
+        {
+          "name": "Get child progress reports",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/reports" }
+        },
+        {
+          "name": "Get child performance",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/performance" }
+        },
+        {
+          "name": "Get child attendance report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/parent/children/{{studentId}}/attendance-report?month=2026-10",
+            "description": "Optional month query uses YYYY-MM; omit it to use the current month."
+          }
+        },
+        {
+          "name": "Get child weekly summary",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/parent/children/{{studentId}}/weekly-summary?weekStart=2026-10-19",
+            "description": "Optional weekStart query accepts a date; omit it to use the current week."
+          }
+        },
+        {
+          "name": "Get child homework and classwork",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/homework" }
+        },
+        {
+          "name": "Get child media",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/media" }
+        },
+        {
+          "name": "Download media file",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/media/{{mediaId}}/file" }
+        },
+        {
+          "name": "Get child invoices and payments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/children/{{studentId}}/invoices" }
+        },
+        {
+          "name": "List upcoming events for my children",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/events" }
+        },
+        {
+          "name": "Create pickup or drop request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personName\": \"Rohan Sharma\",\n  \"personPhone\": \"9876543213\",\n  \"relation\": \"Uncle\",\n  \"type\": \"PICKUP\",\n  \"date\": \"2026-10-25\",\n  \"reason\": \"Parent is out of town.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/parent/children/{{studentId}}/pickup-requests"
+          }
+        },
+        {
+          "name": "List my pickup requests",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/parent/pickup-requests" }
+        },
+        {
+          "name": "Cancel pickup request",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/parent/pickup-requests/{{pickupRequestId}}/cancel"
+          }
+        }
+      ]
+    }
+  ]
+}

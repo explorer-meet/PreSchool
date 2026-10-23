@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { api, upload } from '../api';
+import { api, appendUploadFile, authHeaders, BASE, upload } from '../api';
+import { popup } from '../ResultPopup';
 import { Badge, Button, Card, Chip, FormScreen, Heading, ListScreen, Page, Sub, Title, colors, day, s, useFetch } from '../ui';
 import { MediaGrid } from './media';
 import { NotificationsScreen, ProfileScreen } from './common';
@@ -38,14 +39,14 @@ function BatchHome({ navigation, route }: any) {
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 function Attendance({ route }: any) {
   const { batch } = route.params;
-  const { data } = useFetch<any[]>(`/teacher/batches/${batch.id}/attendance`);
-  const [rows, setRows] = useState<Record<string, { status: Status | null; late: string }>>({});
+  const { data, reload } = useFetch<any[]>(`/teacher/batches/${batch.id}/attendance`);
+  const [edits, setEdits] = useState<Record<string, { status?: Status | null; late?: string }>>({});
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (data) setRows(Object.fromEntries(data.map((d) => [d.id, { status: d.status, late: d.lateMinutes ? String(d.lateMinutes) : '' }])));
-  }, [data]);
+  const rows = useMemo(() => Object.fromEntries((data ?? []).map((d) => [
+    d.id, { status: edits[d.id]?.status ?? d.status, late: edits[d.id]?.late ?? (d.lateMinutes ? String(d.lateMinutes) : '') },
+  ])) as Record<string, { status: Status | null; late: string }>, [data, edits]);
   if (!data) return null;
-  const set = (id: string, p: Partial<{ status: Status | null; late: string }>) => setRows((r) => ({ ...r, [id]: { ...r[id], ...p } }));
+  const set = (id: string, p: Partial<{ status: Status | null; late: string }>) => setEdits((r) => ({ ...r, [id]: { ...r[id], ...p } }));
 
   async function save() {
     const records: any[] = [];
@@ -54,23 +55,25 @@ function Attendance({ route }: any) {
       if (!r?.status) continue;
       if (r.status === 'LATE') {
         const m = parseInt(r.late, 10);
-        if (!m || m < 1) return Alert.alert('Late minutes', `Enter how many minutes ${st.name} was late`);
+        if (!m || m < 1) return popup.warn('Late minutes', `Enter how many minutes ${st.name} was late`);
         records.push({ studentId: st.id, status: 'LATE', lateMinutes: m });
       } else records.push({ studentId: st.id, status: r.status });
     }
-    if (!records.length) return Alert.alert('Nothing to save', 'Mark at least one child');
+    if (!records.length) return popup.warn('Nothing to save', 'Mark at least one child');
     setBusy(true);
     try {
       await api('POST', `/teacher/batches/${batch.id}/attendance`, { date: new Date().toISOString().slice(0, 10), records });
-      Alert.alert('Saved', 'Attendance saved. Parents of absent/late children were notified.');
-    } catch (e: any) { Alert.alert('Error', e.message); } finally { setBusy(false); }
+      popup.success('Attendance saved!', 'Parents of absent/late children were notified.', { emoji: '🗓️' });
+      setEdits({});
+      await reload();
+    } catch (e: any) { popup.error(e.message); } finally { setBusy(false); }
   }
 
   const mark: [Status, string, string][] = [['PRESENT', 'Present', colors.ok], ['ABSENT', 'Absent', colors.bad], ['LATE', 'Late', colors.warn]];
   return (
     <Page>
       <Sub>{day(new Date())}</Sub>
-      <Button label="Mark everyone present" secondary onPress={() => setRows(Object.fromEntries(data.map((d) => [d.id, { status: 'PRESENT' as Status, late: '' }])))} />
+      <Button label="Mark everyone present" secondary onPress={() => setEdits(Object.fromEntries(data.map((d) => [d.id, { status: 'PRESENT' as Status, late: '' }])))} />
       {data.map((st) => {
         const r = rows[st.id] ?? { status: null, late: '' };
         return (
@@ -113,7 +116,7 @@ const AddWork = ({ navigation, route }: any) => (
       { key: 'dueDate', label: 'Due date', kind: 'date', required: false },
     ]}
     submit={(b) => api('POST', `/teacher/batches/${route.params.batch.id}/homework`, b)}
-    onDone={() => { Alert.alert('Posted', 'Parents have been notified'); navigation.goBack(); }} />
+    onDone={() => { popup.success('Notification sent!', 'Parents have been notified.', { emoji: '📣' }); navigation.goBack(); }} />
 );
 
 function Media({ navigation, route }: any) {
@@ -139,28 +142,26 @@ function AddMedia({ navigation, route }: any) {
 
   async function pick(source: 'camera' | 'library') {
     const perm = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert('Permission needed', 'Please allow access in settings.');
+    if (!perm.granted) return popup.warn('Permission needed', 'Please allow access in settings.');
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images', 'videos'], quality: 0.7, videoMaxDuration: 60 };
     const r = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     if (!r.canceled) setAsset(r.assets[0]);
   }
 
   async function send() {
-    if (!asset) return Alert.alert('Choose a photo or video first');
-    if (!wholeClass && !tagged.length) return Alert.alert('Select at least one child, or share with the whole class');
-    const isVideo = asset.type === 'video';
-    const type = asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+    if (!asset) return popup.warn('Choose a photo or video first');
+    if (!wholeClass && !tagged.length) return popup.warn('Select who to share with', 'Pick at least one child, or share with the whole class.');
     const form = new FormData();
-    form.append('file', { uri: asset.uri, name: isVideo ? 'clip.mp4' : 'photo.jpg', type } as any);
     if (activity.trim()) form.append('activity', activity.trim());
     if (caption.trim()) form.append('caption', caption.trim());
     if (!wholeClass) form.append('studentIds', JSON.stringify(tagged));
     setBusy(true);
     try {
+      await appendUploadFile(form, 'file', asset, false);
       await upload(`/teacher/batches/${batch.id}/media`, form);
-      Alert.alert('Shared', wholeClass ? 'Published to all parents of this batch.' : 'Shared with the selected children’s parents.');
+      popup.success('Shared!', wholeClass ? 'Published to all parents of this batch.' : 'Shared with the selected children’s parents.', { emoji: '📷' });
       navigation.goBack();
-    } catch (e: any) { Alert.alert('Upload failed', e.message); } finally { setBusy(false); }
+    } catch (e: any) { popup.error(e.message, 'Upload failed'); } finally { setBusy(false); }
   }
 
   return (
@@ -265,11 +266,18 @@ function PickupCard({ p, reload }: { p: any; reload: () => void }) {
     <Card>
       <Title>{p.student.name} — {p.type}</Title>
       <Sub>{p.personName} ({p.relation}) · {p.personPhone}</Sub>
+      {p.authorizedPersonId ? (
+        <>
+          <Sub>Registered pickup person · verify their identity before handover</Sub>
+          <Image source={{ uri: `${BASE}/teacher/pickups/${p.id}/authorized-photo`, headers: authHeaders() }}
+            resizeMode="cover" style={{ width: 112, height: 112, borderRadius: 16, marginVertical: 10 }} />
+        </>
+      ) : null}
       <Text style={[s.label, { marginTop: 8 }]}>Ask the person for their 4-digit code</Text>
       <TextInput style={s.input} keyboardType="number-pad" maxLength={4} value={code} onChangeText={setCode} placeholder="----" />
       <Button label="Verify & hand over" busy={busy} onPress={async () => {
         setBusy(true);
-        try { await api('POST', `/teacher/pickups/${p.id}/complete`, { code }); reload(); } catch (e: any) { Alert.alert('Not verified', e.message); } finally { setBusy(false); }
+        try { await api('POST', `/teacher/pickups/${p.id}/complete`, { code }); popup.success('Pick-up verified', 'Handed over safely.', { emoji: '🚸' }); reload(); } catch (e: any) { popup.error(e.message, 'Not verified'); } finally { setBusy(false); }
       }} />
     </Card>
   );
@@ -281,7 +289,12 @@ const icons: Record<string, string> = { Classes: '🏫', 'Pick-ups': '🚸', Ale
 
 export function TeacherApp() {
   return (
-    <Tabs.Navigator screenOptions={({ route }) => ({ tabBarActiveTintColor: colors.primary, tabBarIcon: () => <Title>{icons[route.name]}</Title> })}>
+    <Tabs.Navigator screenOptions={({ route }) => ({
+      tabBarActiveTintColor: colors.primary,
+      tabBarIcon: () => <Title>{icons[route.name]}</Title>,
+      tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border, paddingTop: 5, elevation: 8 },
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+    })}>
       <Tabs.Screen name="Classes" component={ClassesStack} options={{ headerShown: false }} />
       <Tabs.Screen name="Pick-ups" component={PickupStack} options={{ headerShown: false }} />
       <Tabs.Screen name="Alerts" component={NotificationsScreen} />
